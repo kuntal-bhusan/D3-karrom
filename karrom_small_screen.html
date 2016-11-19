@@ -1,0 +1,961 @@
+<!--
+Author : Kuntal Bhusan
+Email : kuntal.bhusan@gmail.com
+
+Insired from : D3.js bouncing ball example available on https://gist.github.com/atul-github/0019158da5d2f8499f7f
+-->
+
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml">
+<head>
+    <title>D3.js based carrom game developed by Kuntal</title>
+    <script src="d3.v3.min.js"></script>
+</head>
+<body>
+
+<script>
+</script>
+
+<div id="mainDiv" style="width:400px; height:500px">
+    <div id="drawAreaOuter" style="width:100%; height:100%;  ">
+
+		<div id="option">
+			<input name="updateButton" 
+                 type="button" 
+                  value="RESET" 
+				  style="height:30px; width:70px"
+                onclick="javascript:reload()" />
+		</div>
+		
+        <div id="drawArea" style="width:100%; height:100%; border:10px solid gray">
+        </div>
+    </div>
+</div>
+
+<script>
+
+    var score = 0; 
+	var turn = 0;
+	var object_index = 0;
+	
+
+	var total_coins = 5;
+	var coins_left = total_coins;
+	
+	
+    var balls = []; // global array representing balls
+    var holes = [];
+    
+    var color = d3.scale.category20();
+    var ScoreText;
+    var StrikerPocketed = false;
+    
+    function arrayContains(query, array) { return (array.indexOf(query) > -1); }
+    
+    
+    
+    // Ball object - multiple balls can be created by instantiating new objects
+    function Ball(svg, x, y, id, color,aoa, weight,status,point) {
+        this.posX = x; // cx
+        this.posY = y; // cy
+        this.color = color;
+
+        this.status = status;
+        this.radius = weight; // radius and weight same ... for now
+        this.jumpSize = 2; // equivalent of speed 
+		this.Friction = 0; // friction parameter
+        this.svg = svg; // parent SVG
+        this.id = id; // id of ball
+        this.aoa = aoa; // initial angle of attack
+        this.weight = weight;
+	this.point = point;
+        
+        //this.point = point;
+        //this.bonus = bonus;
+
+	if (!this.aoa)
+            this.aoa = Math.PI / 7;
+        if (!this.weight)
+            this.weight = 10;
+        this.radius = this.weight;
+			
+		
+        this.radius = this.weight;
+
+        this.data = [this.id]; // allow us to use d3.enter()
+
+        var thisobj = this; // using thisobj instead of this. this many times not reliable particularly handling evnet
+
+
+        // Now aoa and speed together is velocity 
+
+        this.vx = Math.cos(thisobj.aoa) * thisobj.jumpSize; // velocity x
+        this.vy = Math.sin(thisobj.aoa) * thisobj.jumpSize; // velocity y
+		
+	//thisobj.vx = Math.cos(thisobj.aoa); // velocity x
+	//thisobj.vy = Math.sin(thisobj.aoa); // velocity y
+        
+//Remains
+
+    ///////////////////////////////////////////////////////////////////////
+    
+
+    ///////////////////////////////////////////////////////////////////////
+    
+
+	this.initialVx = this.vx;
+        this.initialVy = this.vy;
+        this.initialPosX = this.posX;
+        this.initialPosY = this.posY;
+
+        // when speed changes, go to initial setting
+        this.GoToInitialSettings = function () {  
+
+            thisobj.vx = 0; // velocity x
+            thisobj.vy = 0; // velocity y
+            
+            thisobj.Update();
+        }
+        
+        if(object_index == 0)
+		   { 
+			ScoreText = svg.append("text")
+						 .attr("x", svg.attr('width')/2 - 100)
+						 .attr("y", 20)
+						 .text( function (d) { return "Score = " + score + " Turn = " + turn; })
+						 .attr("font-family", "sans-serif")
+						 .attr("font-size", "20px")
+						 .attr("fill", "red");
+
+		
+			}
+		object_index ++	
+			
+			// Updating the score
+			ScoreText.transition().duration(1000).text("Score = " + score + " Turns = " + turn).attr("font-family", "sans-serif").attr("font-size", "20px");
+
+			var line1= svg.append("line").attr("stroke-width", 1).attr("stroke", "black");
+			//var line2= svg.append("line").attr("stroke-width", 1).attr("stroke", "red");
+			
+			
+			var StrikeAngle = 0; //making it a global variable
+
+			//for (var i = 0; i < balls.length; ++i) {
+			//	balls[i].Draw();
+			//}
+		
+
+			 var drag = d3.behavior.drag()
+			 
+		     .on('dragstart', function() {  
+			 prevX = d3.mouse(this)[0]; prevY = d3.mouse(this)[1]; 
+			 
+			 //ScoreText.transition().duration(1000).text("Score = " + score + " Next Turn = " + (turn+1)).attr("font-family", "sans-serif").attr("font-size", "20px");
+			
+			 
+			 //line2.attr('x1',0).attr('y1',0);
+			 //line2.attr('x2',svg.attr('width')).attr('y2',svg.attr('height'));
+			 })
+			 
+			 
+		     .on('drag', function() { 
+				//d3.select(this).attr('cx', d3.event.x).attr('cy', d3.event.y); 
+				
+				//line1.attr('x1',prevX).attr('y1',prevY);
+				line1.attr('x1',thisobj.posX).attr('y1',thisobj.posY);
+				line1.attr('x2',d3.event.x).attr('y2',d3.event.y);
+
+				//line2.attr('x1',thisobj.posX).attr('y1',thisobj.posY);
+				//line2.attr('x2',thisobj.posX).attr('y2',d3.event.y);
+				
+				
+				function Point(x, y) {
+					  this.x = x;
+					  this.y = y;
+				}
+			
+				var A = new Point(thisobj.posX, d3.event.y); //base of the normal
+				var B = new Point(d3.event.x, d3.event.y); //current mouse position
+				var C = new Point(thisobj.posX, thisobj.posY); //center
+			
+				var AB = Math.sqrt(Math.pow(B.x-A.x,2)+ Math.pow(B.y-A.y,2));    
+	    			var BC = Math.sqrt(Math.pow(B.x-C.x,2)+ Math.pow(B.y-C.y,2)); 
+	    			var AC = Math.sqrt(Math.pow(C.x-A.x,2)+ Math.pow(C.y-A.y,2));
+	    			
+	    			var StrikeAngleRadian = Math.acos((BC*BC+AB*AB-AC*AC)/(2*BC*AB));
+	    			var StrikeAngleDegree = StrikeAngleRadian * 180/Math.PI;
+				
+				if(B.x > C.x && B.y > C.y) 
+				{ StrikeAngle = Math.PI + Math.acos((BC*BC+AB*AB-AC*AC)/(2*BC*AB));  }
+				if(B.x > C.x && B.y < C.y)
+				{ StrikeAngle = Math.PI - Math.acos((BC*BC+AB*AB-AC*AC)/(2*BC*AB));  }
+				if(B.x < C.x && B.y < C.y)
+				{ StrikeAngle = 2*Math.PI + Math.acos((BC*BC+AB*AB-AC*AC)/(2*BC*AB));  }
+				if(B.x < C.x && B.y > C.y)
+				{ StrikeAngle = 2*Math.PI - Math.acos((BC*BC+AB*AB-AC*AC)/(2*BC*AB));  }
+				
+				
+				//console.log(StrikeAngleDegree);
+				
+				})
+			 
+			 
+		     .on('dragend', function() { 
+			    //d3.select(this).style('fill', 'black'); 
+				
+
+
+			var absx = Math.abs(parseFloat(line1.attr('x2')) - parseFloat(line1.attr('x1')));
+			var absy = Math.abs(parseFloat(line1.attr('y2')) - parseFloat(line1.attr('y1')));
+
+			var distance = (absx * absx) + (absy * absy);
+			var maxDist = Math.sqrt( (svg.attr('width')*svg.attr('width')) + (svg.attr('height')*svg.attr('height')) );
+			distance = Math.sqrt(distance);
+			
+			var linearScale = d3.scale.linear().domain([0,maxDist]).range([0,30]);
+			distance = linearScale(distance);
+			
+			
+			line1.attr('x1',0).attr('y1',0);
+			line1.attr('x2',0).attr('y2',0);
+			
+			//line2.attr('x1',0).attr('y1',0);
+			//line2.attr('x2',0).attr('y2',0);
+
+			if(distance > 0)
+			{
+			turn ++;
+			
+			if( turn > total_coins) { score = score - 1; } 
+			
+			if(score < 0 || coins_left == 0){ 	game_over(svg); }
+			
+			ScoreText.transition().duration(1000).text("Score = " + score + " Turns = " + turn).attr("font-family", "sans-serif").attr("font-size", "20px");
+			StartStopGame(distance,StrikeAngle,thisobj.Friction);
+			}
+				
+				 });
+
+            this.Draw = function () {
+            var svg = thisobj.svg;
+			
+            var data = svg.selectAll('#' + thisobj.id)
+                        .data(thisobj.data);
+						
+			var ball = data.enter()
+							.append("g");		
+                              
+                        
+            var circle = ball
+                .append("circle")
+                .attr({"id" : thisobj.id, 'class' : 'ball', 'r' : thisobj.radius, 'weight' : thisobj.weight})
+                .style("fill", thisobj.color)
+                ;
+                
+            circle
+                //.transition()
+                //.duration(50)
+                .attr("cx", function() { return thisobj.posX; } )
+                .attr("cy", function() { return thisobj.posY; } )
+            ;
+            
+            /*
+            var text = ball
+             	.append("text")
+				.attr({"id" : thisobj.id, 'class' : 'ball'})
+                .style("fill", 'white')
+                ;
+               
+            text.attr("x", function() { return thisobj.posX; } )
+                .attr("y", function() { return thisobj.posY; } )
+                .attr("text-anchor", "middle")
+                .text(thisobj.point);               
+            */
+
+			    	
+	//ball.attr("transform", "translate(80,0)");
+	//ball.attr("transform", function() { return "translate(" + ball.posX + "," + ball.posY + ")"; });
+
+
+	
+	
+	 if(thisobj.status == 'striker') { ball.call(drag); }
+			
+        
+		
+	}
+        
+        
+        
+		
+		
+		
+		
+	this.Update = function () {
+	
+
+		var svg = thisobj.svg;
+			
+		
+            var ball = svg.selectAll('#' + thisobj.id)
+                        .data(thisobj.data);
+                              
+                       
+            ball.enter()
+                .append("circle")
+                ;
+                
+            ball
+                .attr("cx", thisobj.posX)
+                .attr("cy", thisobj.posY)
+            ;
+            
+            /*
+            ball.enter()
+             	.append("text")
+                .style("fill", 'white')
+                ;
+               
+            ball.attr("x", thisobj.posX )
+                .attr("y", thisobj.posY )
+                .attr("text-anchor", "middle")
+                .text(thisobj.point);  
+			*/	
+
+				
+				
+	}
+		
+		
+		
+		
+		
+		
+		
+		
+
+        this.Move = function (distance,StrikeAngle,hit,Friction) {
+
+            var svg = thisobj.svg;
+			var distance = distance;
+			var CurrentStrikeAngle = StrikeAngle;
+			
+			var Friction = Friction;
+			var push = thisobj.jumpSize - Friction;
+			
+
+			
+			if(push > 0)
+			{
+				
+				//console.log(distance+" "+CurrentStrikeAngle);
+			
+				if(thisobj.status == 'striker' )
+				{	
+					//console.log("Moving..A");
+
+					if(hit == 0)
+					{
+					
+					// setting all initial velocities to zero after a strike	
+					for (var i = 0; i < balls.length; ++i) 
+					{
+					balls[i].GoToInitialSettings();
+					}
+					
+					//thisobj.aoa = Math.PI * CurrentStrikeAngle/180; // if angle in degree
+					thisobj.aoa = CurrentStrikeAngle; // as angle is directly calculated in radian
+					thisobj.vx = Math.cos(thisobj.aoa) * distance; // velocity x
+					thisobj.vy = Math.sin(thisobj.aoa) * distance; // velocity y
+				
+					thisobj.posX += thisobj.vx * push;
+					thisobj.posY += thisobj.vy * push;
+				
+					}
+
+					else
+					{	
+					thisobj.posX += thisobj.vx * push;
+					thisobj.posY += thisobj.vy * push;	
+					}
+
+
+				}
+				else
+				{
+				thisobj.posX += thisobj.vx * push;
+		    		thisobj.posY += thisobj.vy * push;
+				}
+
+
+			    if (parseInt(svg.attr('width')) <= (thisobj.posX + thisobj.radius)) {
+				thisobj.posX = parseInt(svg.attr('width')) - thisobj.radius - 1;
+				thisobj.aoa = Math.PI - thisobj.aoa;
+				thisobj.vx = -thisobj.vx;
+			    }
+
+			    if ( thisobj.posX < thisobj.radius) {
+				thisobj.posX = thisobj.radius+1;
+				thisobj.aoa = Math.PI - thisobj.aoa;
+				thisobj.vx = -thisobj.vx;
+			    }
+
+			    if (parseInt(svg.attr('height')) < (thisobj.posY + thisobj.radius)) {
+				thisobj.posY = parseInt(svg.attr('height')) - thisobj.radius - 1;
+				thisobj.aoa = 2 * Math.PI - thisobj.aoa;
+				thisobj.vy = -thisobj.vy;
+			    }
+
+			    if (thisobj.posY < thisobj.radius) {
+				thisobj.posY = thisobj.radius+1;
+				thisobj.aoa = 2 * Math.PI - thisobj.aoa;
+				thisobj.vy = -thisobj.vy;
+			    }
+			
+
+
+			    
+			    // **** NOT USING AOA except during initilization. Just left this for future reference ***** 
+			    if (thisobj.aoa > 2 * Math.PI)
+				thisobj.aoa = thisobj.aoa - 2 * Math.PI;
+			    if (thisobj.aoa < 0)
+				thisobj.aoa = 2 * Math.PI + thisobj.aoa;
+
+				
+			    thisobj.Update();
+			    
+		    	//console.log("Moving..D");
+		    	
+		    	
+		    	return 'continue';
+		    
+		    }
+		    else
+		    {
+				//console.log("Moving..B");
+				if(thisobj.status == 'striker' )
+				{
+				thisobj.posX = svg.attr('width')/2;
+				thisobj.posY = svg.attr('height')/2;
+				thisobj.Update();
+				}
+				
+				if(score < 0 || coins_left == 0){ 	game_over(svg); }
+				
+		    	return 'stop';
+		   
+		    }
+
+   
+		    
+		    
+        }
+    }
+    
+    
+    ///////////////////////////////////////////////////////////////////////
+    
+
+    function CheckCollision(ball1, ball2) {
+        var absx = Math.abs(parseFloat(ball2.posX) - parseFloat(ball1.posX));
+        var absy = Math.abs(parseFloat(ball2.posY) - parseFloat(ball1.posY));
+
+        // find distance between two balls.
+        var distance = (absx * absx) + (absy * absy);
+        distance = Math.sqrt(distance);
+        // check if distance is less than sum of two radius - if yes, collision
+        if (distance < (parseFloat(ball1.radius) + parseFloat(ball2.radius))) {
+            return true;
+        }
+        return false;
+    }
+    
+    ///////////////////////////////////////////////////////////////////////
+
+
+
+    
+    
+    
+    ///////////////////////////////////////////////////////////////////////
+    
+    //courtsey thanks to several internet sites for formulas
+    //detect collision, find intersecting point and set new speed+direction for each ball based on weight (weight=radius)
+    function ProcessCollision(ball1, ball2) {
+
+        if (ball2 <= ball1)
+            return;
+        if (ball1 >= (balls.length-1) || ball2 >= balls.length )
+            return;
+
+	var index_b1 = 	ball1;
+	var index_b2 = 	ball2;
+	
+        ball1 = balls[ball1];
+        ball2 = balls[ball2];
+		
+	
+	
+	var check1 = 0;
+	var check2 = 0;
+	
+	//console.log("Processing collision between " + ball1.color + " and " + ball2.color);
+
+        if ( CheckCollision(ball1, ball2) ) {
+        
+        //console.log("collision between " + ball1.color + " and " + ball2.color);
+        
+        if( ball1.status == 'hole' || ball2.status == 'hole' )
+		{
+			    // POCKET
+
+			
+			    if(ball1.status == 'hole')
+			    {
+			    
+			    //console.log("pocketed 1 "+ ball2.color + " index " + index_b2);
+			    
+			    	if( ball2.status != 'striker') 
+			    	{ 
+			    	ball2.posX = 0; ball2.posY = 0; 
+			    	ball2.Update(); 
+			    	ball2.status = 'pocket';
+					
+					var bonus = 1;
+					if( ball2.point == turn ) { bonus = ball2.point; }
+					score += ball2.point * bonus; 
+					
+					coins_left = coins_left - 1; console.log("Coins left " + coins_left);
+					
+					if(score < 0 || coins_left == 0){ 	game_over(svg); }
+					
+					ScoreText.transition().duration(1000).text("Score = " + score + " Turns = " + turn).attr("font-family", "sans-serif").attr("font-size", "20px");
+			    	//balls.splice(index_b2, 1);
+			    	}
+			    	else
+			    	{
+					StrikerPocketed = true;
+					
+					console.log('Status 1 ' + ball2.status);
+					
+					//if(check1 == 0)
+					//{
+					//console.log('Striker pocket 1 ' + ball2.posX + "," + ball2.posY);
+					//score = score - 1;
+					//ScoreText.transition().duration(1000).text("Score = " + score + " Turn = " + turn).attr("font-family", "sans-serif").attr("font-size", "20px");
+					//}
+					
+					ball2.posX = 0; ball2.posY = 0;
+					ball2.Update();
+			
+			    	}
+			    }
+			    if(ball2.status == 'hole')
+			    {
+			    
+			    //console.log("pocketed 2 "+ ball1.color + " index " + index_b1);
+			    	
+			    	if( ball1.status != 'striker') 
+			    	{ 
+			    	ball1.posX = 0; ball1.posY = 0; 
+			    	ball1.Update(); 
+			    	ball1.status = 'pocket';
+					
+					var bonus = 1;
+					if( ball1.point == turn ) { bonus = ball1.point; }
+					 score += ball1.point * bonus; 
+					 
+					 coins_left = coins_left - 1; console.log("Coins left " + coins_left);
+					 
+					 if(score < 0 || coins_left == 0){ 	game_over(svg); }
+					 
+					 ScoreText.transition().duration(1000).text("Score = " + score + " Turns = " + turn).attr("font-family", "sans-serif").attr("font-size", "20px");
+			    	//balls.splice(index_b1, 1);
+			    	}
+			    	else
+			    	{
+					StrikerPocketed = true;
+					
+					//console.log('Status 2 ' + ball1.status);
+					
+					//if(check2 == 0)
+					//{
+					//console.log('Striker pocket 2 ' + ball1.posX + "," + ball1.posY);
+					//score = score - 1;
+					//ScoreText.transition().duration(1000).text("Score = " + score + " Turn = " + turn).attr("font-family", "sans-serif").attr("font-size", "20px");
+					//}
+					
+					ball1.posX = 0; ball1.posY = 0;
+					ball1.Update();
+			    	}
+			    }
+				
+			    return false;		
+
+		}
+        	else
+        	{
+        		    // BOUNCE
+        
+			    // intersection point
+			    var interx = ((ball1.posX * ball2.radius) + ball2.posX * ball1.radius)
+			    / (ball1.radius + ball2.radius);
+			    var intery = ((ball1.posY * ball2.radius) + ball2.posY  * ball1.radius)
+			    / (ball1.radius + ball2.radius);
+
+
+
+			    // calculate new velocity of each ball.
+			    var vx1 = (ball1.vx * (ball1.weight - ball2.weight)
+				+ (2 * ball2.weight * ball2.vx )) / (ball1.weight + ball2.weight);
+			    var vy1 = (ball1.vy * (ball1.weight - ball2.weight)
+				+ (2 * ball2.weight * ball2.vy)) / (ball1.weight + ball2.weight);
+			    var vx2 = (ball2.vx * (ball2.weight - ball1.weight)
+				+ (2 * ball1.weight * ball1.vx)) / (ball1.weight + ball2.weight);
+			    var vy2 = (ball2.vy * (ball2.weight - ball1.weight)
+				+ (2 * ball1.weight * ball1.vy)) / (ball1.weight + ball2.weight);
+
+			    //set velocities for both balls
+			    ball1.vx = vx1;
+			    ball1.vy = vy1;
+			    ball2.vx = vx2;
+			    ball2.vy = vy2;
+			   
+
+			    //ensure one ball is not inside others. distant apart till not colliding
+			    while (CheckCollision(ball1, ball2)) {
+				ball1.posX += ball1.vx;
+				ball1.posY += ball1.vy;
+
+				ball2.posX += ball2.vx;
+				ball2.posY += ball2.vy;
+			    }
+			    ball1.Update();
+			    ball2.Update();
+			    
+			    //console.log('Moving..J');
+			    
+			    return true;
+			    
+		}
+			    
+			
+        }
+
+		else
+		{
+			return false;
+		}
+
+
+    }
+    
+    ///////////////////////////////////////////////////////////////////////
+    
+    
+    
+    
+    
+    ///////////////////////////////////////////////////////////////////////
+    ///////////////////////////////////////////////////////////////////////
+    ///////////////////////////////////////////////////////////////////////
+    
+	function game_over(svg){
+	
+	var svg = svg;
+
+	svg.selectAll("*").remove();
+	
+	svg.append("text")
+						 .attr("x", svg.attr('width')/2)
+						 .attr("y", svg.attr('height')/2)
+						 .text( "GAME OVER")
+						 .attr("font-family", "sans-serif")
+						 .attr("font-size", svg.attr('width')/20 +"px")
+						 .attr("fill", "red")
+						 .attr("text-anchor", "middle");
+	
+
+	svg.append("text")
+						 .attr("x", svg.attr('width')/2)
+						 .attr("y", svg.attr('height')/2 + svg.attr('height')/20)
+						 .text( "You Scored " + score + " in " + turn + " Turns")
+						 .attr("font-family", "sans-serif")
+						 .attr("font-size", svg.attr('width')/30 +"px")
+						 .attr("fill", "red")
+						 .attr("text-anchor", "middle");	
+						 
+		
+	}
+	
+
+    
+
+    function Initialize(containerId) {
+        var height = document.getElementById(containerId).clientHeight;
+        var width = document.getElementById(containerId).clientWidth;
+        gContainerId = containerId;
+        gCanvasId = containerId + '_canvas';
+        gTopGroupId = containerId + '_topGroup';
+        var svg = d3.select("#" + containerId).append("svg")
+            //.attr("id", gCanvasId)
+            .attr("width", width)
+            .attr("height", height)
+            //.append("g")
+            //.attr("id", gTopGroupId)
+            //.attr("x", 0)
+            //.attr("y", 0)
+            .style("fill", "none")
+        //.attr("transform", "translate(" + 1 + "," + 1 + ")")
+        ;
+
+		function getRandomNum(min, max) {
+			var num = Math.random() * (max - min) + min;
+			return num;
+		}
+		
+		
+		// Generating random non overlapping circles
+		
+			var platforms = [],
+				offset = 100,
+				platformWidth = width-100,
+				platformHeight = height -100,
+				circleRadii = 40;
+
+				
+			platforms.push({x:width/2,y:height/2});
+			
+			
+			function generatePlatforms(k) {
+			  var placed = 0;
+			  while(placed < k) {
+				  
+				
+				  
+				var iteration = 0;
+				
+				while(true){
+
+					
+					var x = Math.floor(Math.random()* (platformWidth - offset) + offset),
+						y = Math.floor(Math.random()* (platformHeight - offset) + offset),
+						count = 0;
+						
+						
+					for(var i=0;i<platforms.length;i++) {
+					  
+					  var dist = Math.sqrt(Math.pow(platforms[i].x-x,2) + Math.pow(platforms[i].y-y,2));
+					  var sep = 2*circleRadii;
+					  
+					  //console.log("Dist = " + dist + " Sep = " + sep + " Iter = " + iteration);
+					  
+					  if( dist <= sep  ) {
+						count = count + 1;
+					  }
+
+					}
+					
+					if(count == 0) {
+					  platforms.push({
+						x: x,
+						y: y
+					  });
+					  placed += 1;
+					  break;
+					}
+					
+					iteration ++;
+					
+					
+			  }
+				
+			  }
+			}
+
+		generatePlatforms(6);
+		
+		
+        balls.push(new Ball(svg, width/2, height/2, 'n3', 'yellow', Math.PI / 2, width/15,'striker'));
+        
+        balls.push(new Ball(svg, platforms[1].x , platforms[1].y , 'n1', 'red', Math.PI / 6,width/30,'boardcoin',5));
+        balls.push(new Ball(svg, platforms[2].x , platforms[2].y , 'n2', 'green', Math.PI / 3, width/30,'boardcoin',4));
+        balls.push(new Ball(svg, platforms[3].x , platforms[3].y , 'n4', 'orange', Math.PI / 2, width/30,'boardcoin',3));
+        balls.push(new Ball(svg, platforms[4].x , platforms[4].y , 'n5', 'pink', Math.PI / 3, width/30,'boardcoin',2));
+        balls.push(new Ball(svg, platforms[5].x , platforms[5].y , 'n6', 'blue', Math.PI / 2, width/30,'boardcoin',1));
+        
+        
+        balls.push(new Ball(svg, 0, 0, 'b1', 'black', Math.PI / 2, width/15,'hole'));
+        balls.push(new Ball(svg, width, 0, 'b2', 'black', Math.PI / 2, width/15,'hole'));
+        balls.push(new Ball(svg, 0, height, 'b3', 'black', Math.PI / 2, width/15,'hole'));
+        balls.push(new Ball(svg, width, height, 'b4', 'black', Math.PI / 2, width/15,'hole'));
+		
+		for (var i = 0; i < balls.length; ++i) {
+            balls[i].Draw();
+			
+			if(balls[i].status == 'boardcoin')
+			{ 
+			
+			//console.log(balls[i].color + "," + balls[i].point); 
+			
+			var tilewidth = width/30;
+			var tileheight = height/35;
+			var Yoffset = 30;
+			var Xoffset = width/2 - balls.length*0.5*0.8*tilewidth;
+			
+			var x1 = Xoffset + i*tilewidth;
+			var y1 = Yoffset;
+			
+			var x2 = x1 + tilewidth/2;
+			var y2 = y1 + 0.8*tileheight;
+			
+			svg.append("rect")
+                            .attr("x", x1)
+                            .attr("y", y1)
+                            .attr("width", tilewidth)
+                            .attr("height", tileheight)
+							.attr("fill",balls[i].color)
+							.attr("opacity",0.5);
+			
+			
+			svg.append("text")
+						 .attr("x", x2)
+						 .attr("y", y2)
+						 .text( function (d) { return balls[i].point; })
+						 .attr("font-family", "sans-serif")
+						 .attr("font-size", "15px")
+						 .attr("fill", "black")
+						 .attr("text-anchor", "middle");
+			
+			}
+        }
+						 
+				
+		
+        return svg;
+    }
+    
+    
+
+    var startStopFlag = null;
+    var startBall = 0;
+    var hit = 0;
+    var moving_nodes = [startBall]; 
+
+    function StartStopGame(distance,StrikeAngle,Friction) {
+        if (startStopFlag == null) {
+            d3.timer(function () {
+			
+			var c1 = 0;
+			var c2 = 0;	
+								
+			for (var k = 0; k < moving_nodes.length; ++k)
+				{ 
+					if(balls[moving_nodes[k]].status != 'hole' && balls[moving_nodes[k]].status != 'pocket') 
+					{ 
+					var r = balls[moving_nodes[k]].Move(distance,StrikeAngle,hit,Friction); 
+					if(r == 'stop') { c2 ++; }
+					c1 ++;
+					//console.log('Moving..E');
+					}  
+					
+				//console.log('Moving..F');	
+				}
+			
+			//console.log('Moving..G');	 
+
+			//console.log(r);
+			if(c1 == c2) { startStopFlag = null; }
+
+			Friction += 0.01;
+			hit = 1;	
+		
+                 	//checking all vs all collisions
+                 	for (var i = 0; i < balls.length; ++i) {
+
+                    	for (var j = i + 1; j < balls.length; ++j) {
+                    	
+                    	if(balls[i].status != 'pocket' && balls[j].status != 'pocket')
+                        {
+                        
+
+		                var x = ProcessCollision(i, j);
+		                
+		                //console.log('Processing collision ' + i + "," + j);
+				//console.log('Normal ' + i + "," + j);
+				// append to moving_nodes hash
+				
+				if(moving_nodes.indexOf(i)==-1) { moving_nodes.push(i);}
+				if(moving_nodes.indexOf(j)==-1) { moving_nodes.push(j);}
+
+				if(r == 'stop' && StrikerPocketed == true)
+				{
+					//console.log('Striker pocket ' + i + "," + j);
+					score = score - 1;
+					
+					if(score < 0 || coins_left == 0){ 	game_over(svg); }
+					
+					ScoreText.transition().duration(1000).text("Score = " + score + " Turns = " + turn).attr("font-family", "sans-serif").attr("font-size", "20px");
+					StrikerPocketed = false;
+				}
+							
+							
+			}
+
+	
+				//console.log('Moving..H');		
+                    }
+                    
+                    //console.log('Moving..I');
+                 }
+				 
+
+			
+                
+                //console.log('Moving..K');
+                
+                if (startStopFlag == null)
+                    { hit = 0;
+                    return true; }
+                else
+                    {return false;}
+            }, 200);
+            startStopFlag = 1;
+            //document.getElementById('startStop').innerHTML = 'Stop';
+        }
+        else {
+            startStopFlag = null;
+            //document.getElementById('startStop').innerHTML = 'Start';
+        }
+    }
+   
+
+
+    function reload() {
+    
+    	location.reload();
+    
+    }
+
+
+    d3.select('body')
+            .on('keydown', function () {
+                if (balls.length == 0)
+                    return;
+                //console.log(d3.event);
+                if (d3.event.keyCode == 27) { // if ESC key - toggle start stop
+                    StartStopGame();
+                }
+            });
+
+
+    var svg = Initialize('drawArea');
+    
+
+
+
+
+</script>
+
+</body>
+</html>
